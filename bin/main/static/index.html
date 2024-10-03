@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #e6e6e6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #1a1a1a;
+        }
+
+        #property-form,
+        #filter-form {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .pagination button {
+            margin: 0 5px;
+            background-color: #007bff;
+            border: none;
+            padding: 6px 12px;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .pagination button:hover {
+            background-color: #0056b3;
+        }
+
+        .pagination button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 600px) {
+            input,
+            textarea,
+            button {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>Property Manager</h1>
+    </header>
+
+    <!-- Filtros -->
+    <div id="filter-form">
+        <h3>Property Filters</h3>
+        <input type="text" id="filter-address" placeholder="Filter by Address" />
+        <input type="number" id="filter-min-price" placeholder="Min Price" />
+        <input type="number" id="filter-max-price" placeholder="Max Price" />
+        <input type="number" id="filter-min-size" placeholder="Min Size (sqm)" />
+        <input type="number" id="filter-max-size" placeholder="Max Size (sqm)" />
+        <button id="filter-button">Apply Filters</button>
+    </div>
+
+    <!-- Formulario para agregar propiedades -->
+    <form id="property-form">
+        <h3>Add New Property</h3>
+        <input type="text" id="address" placeholder="Enter Address" required />
+        <input type="number" id="price" placeholder="Enter Price" required />
+        <input type="number" id="size" placeholder="Enter Size (sqm)" required />
+        <textarea id="description" placeholder="Enter Description" required></textarea>
+        <button type="submit" id="form-submit-button">Add Property</button>
+    </form>
+
+    <!-- Tabla para mostrar las propiedades -->
+    <table id="property-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Address</th>
+                <th>Price</th>
+                <th>Size</th>
+                <th>Description</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="pagination" id="pagination-controls"></div>
+
+    <script>
+        let properties = [];
+        let isUpdating = false;
+        let currentPropertyId = null;
+        const itemsPerPage = 5;
+        let currentPage = 1;
+
+        document.getElementById('property-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const property = {
+                address: document.getElementById('address').value,
+                price: parseFloat(document.getElementById('price').value),
+                size: parseFloat(document.getElementById('size').value),
+                description: document.getElementById('description').value
+            };
+
+            if (isUpdating) {
+                updatePropertyInServer(currentPropertyId, property);
+            } else {
+                addPropertyToServer(property);
+            }
+        });
+
+        function addPropertyToServer(property) {
+            fetch('/propertie', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(property)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('Property added successfully');
+                loadProperties();
+                resetForm();
+            })
+            .catch(error => {
+                alert('Error adding property: ' + error.message);
+            });
+        }
+
+        function updatePropertyInServer(id, property) {
+            fetch(`/propertie/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(property)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                alert('Property updated successfully');
+                loadProperties();
+                resetForm();
+            })
+            .catch(error => {
+                alert('Error updating property: ' + error.message);
+            });
+        }
+
+        function loadProperties() {
+            fetch('/propertie')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    properties = data;
+                    currentPage = 1; 
+                    applyFilters(); 
+                })
+                .catch(error => {
+                    alert('Error loading properties: ' + error.message);
+                });
+        }
+
+        function applyFilters() {
+            const filteredProperties = properties.filter(property => {
+                const address = document.getElementById('filter-address').value.toLowerCase();
+                const minPrice = parseFloat(document.getElementById('filter-min-price').value) || 0;
+                const maxPrice = parseFloat(document.getElementById('filter-max-price').value) || Infinity;
+                const minSize = parseFloat(document.getElementById('filter-min-size').value) || 0;
+                const maxSize = parseFloat(document.getElementById('filter-max-size').value) || Infinity;
+
+                return property.address.toLowerCase().includes(address) &&
+                       property.price >= minPrice &&
+                       property.price <= maxPrice &&
+                       property.size >= minSize &&
+                       property.size <= maxSize;
+            });
+
+            displayProperties(filteredProperties);
+        }
+
+        function displayProperties(propertiesToDisplay) {
+            const tableBody = document.querySelector('#property-table tbody');
+            tableBody.innerHTML = '';
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const paginatedProperties = propertiesToDisplay.slice(start, end);
+
+            paginatedProperties.forEach(property => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${property.propertyID}</td>
+                    <td>${property.address}</td>
+                    <td>$${property.price.toFixed(2)}</td>
+                    <td>${property.size} sqm</td>
+                    <td>${property.description}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button onclick="prepareUpdate(${property.propertyID})"><i class="fas fa-edit"></i> Edit</button>
+                            <button onclick="deleteProperty(${property.propertyID})"><i class="fas fa-trash-alt"></i> Delete</button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            setupPagination(propertiesToDisplay.length);
+        }
+
+        function setupPagination(totalItems) {
+            const paginationControls = document.getElementById('pagination-controls');
+            paginationControls.innerHTML = '';
+
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const button = document.createElement('button');
+                button.innerText = i;
+                button.disabled = (i === currentPage);
+                button.addEventListener('click', () => {
+                    currentPage = i;
+                    applyFilters();
+                });
+                paginationControls.appendChild(button);
+            }
+        }
+
+        document.getElementById('filter-button').addEventListener('click', () => {
+            applyFilters();
+        });
+
+        function resetForm() {
+            document.getElementById('property-form').reset();
+            isUpdating = false;
+            currentPropertyId = null;
+            document.getElementById('form-submit-button').innerText = 'Add Property';
+        }
+
+        function prepareUpdate(propertyID) {
+            const property = properties.find(prop => prop.propertyID === propertyID);
+            if (property) {
+                document.getElementById('address').value = property.address;
+                document.getElementById('price').value = property.price;
+                document.getElementById('size').value = property.size;
+                document.getElementById('description').value = property.description;
+                isUpdating = true;
+                currentPropertyId = propertyID;
+                document.getElementById('form-submit-button').innerText = 'Update Property';
+            }
+        }
+
+        function deleteProperty(propertyID) {
+            if (confirm('Are you sure you want to delete this property?')) {
+                fetch(`/propertie/${propertyID}`, { method: 'DELETE' })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        alert('Property deleted successfully');
+                        loadProperties();
+                    })
+                    .catch(error => {
+                        alert('Error deleting property: ' + error.message);
+                    });
+            }
+        }
+
+        // Load properties on page load
+        window.onload = loadProperties;
+    </script>
+</body>
+
+</html>
